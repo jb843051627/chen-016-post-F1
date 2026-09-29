@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <th:block th:include="include :: header('责令改正情况确认单')"/>
+    <style>
+        .doc {width: 760px; margin: 20px auto; background: #fff; padding: 50px 70px; box-shadow: 0 0 8px rgba(0,0,0,.08);}
+        .doc h1 {text-align: center; font-size: 24px; letter-spacing: 4px; margin-bottom: 6px;}
+        .doc .doc-no {text-align: right; margin-bottom: 18px;}
+        .doc p {line-height: 2; font-size: 15px; text-indent: 2em;}
+        .doc .plain {text-indent: 0;}
+        .doc table {width: 100%; border-collapse: collapse; margin: 10px 0;}
+        .doc table td {border: 1px solid #333; padding: 10px 12px; font-size: 15px; line-height: 1.8;}
+        .doc table td.k {width: 130px; background: #f7f7f7; text-align: center;}
+        .doc .sign {margin-top: 40px; text-align: right; line-height: 2;}
+        .doc .src {margin-top: 26px; color: #999; font-size: 12px; border-top: 1px dashed #ccc; padding-top: 8px;}
+        @media print { .no-print {display:none !important;} .doc {box-shadow:none; margin:0; width:auto;} }
+    </style>
+</head>
+<body class="pear-container">
+<input type="hidden" id="billId" th:value="${billId}">
+<div class="no-print" style="text-align:center;margin-top:16px">
+    <a th:href="@{/postPunishBill/view}" class="pear-btn pear-btn-md">返回台账</a>
+    <button class="pear-btn pear-btn-primary pear-btn-md" onclick="window.print()"><i class="layui-icon layui-icon-print"></i> 打印</button>
+</div>
+<div class="doc" id="doc"></div>
+
+<th:block th:include="include :: footer"/>
+<script th:inline="javascript">
+    layui.use(['jquery', 'layer'], function () {
+        let $ = layui.jquery, layer = layui.layer;
+        let BILL_ID = $('#billId').val();
+
+        function esc(s) {
+            return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        }
+        function fmt(d) {
+            return d ? d.replace('T', ' ').substring(0, 19) : '';
+        }
+
+        $.get(rootPath + "/postPunishBill/confirm", {id: BILL_ID}, function (res) {
+            if (res.code !== 200) {
+                $('#doc').html('<p style="text-indent:0;color:#c00;text-align:center">' + esc(res.msg) + '</p>');
+                return;
+            }
+            let d = res.data;
+            // 五样（字号/网点地址/事由/改正期限/救济途径）全部来自同一件核签单，页面不提供手工改的格子
+            $('#doc').html(
+                '<h1>责令改正情况确认单</h1>' +
+                '<div class="doc-no">编号：' + esc(d.confirmNo) + '</div>' +
+                '<table>' +
+                '<tr><td class="k">企业字号</td><td>' + esc(d.siteNo) + '</td><td class="k">企业全称</td><td>' + esc(d.siteName) + '</td></tr>' +
+                '<tr><td class="k">涉案网点</td><td>' + esc(d.outletNo) + '</td><td class="k">网点地址</td><td>' + esc(d.outletAddr) + '</td></tr>' +
+                '<tr><td class="k">事由</td><td colspan="3">' + esc(d.caseReason) + '</td></tr>' +
+                '<tr><td class="k">责令改正期限</td><td colspan="3">' + esc(fmt(d.rectifyDeadline)) + '</td></tr>' +
+                '<tr><td class="k">救济途径</td><td colspan="3">' + esc(d.reliefWay) + '</td></tr>' +
+                '</table>' +
+                '<p>本确认单所载企业字号、网点地址、事由、责令改正期限及救济途径，均与查处核签单（' + esc(d.billNo) +
+                    '）同源带出，两边摆出的数一致。</p>' +
+                '<div class="sign">邮政管理部门（签章）<br>' + esc(fmt(d.issueTime)).substring(0, 10) + '</div>' +
+                '<div class="src">来源：核签单 ' + esc(d.billNo) + ' 第 ' + (d.roundNo + 1) +
+                    ' 趟末一开一键转出 · 开具时刻 ' + esc(fmt(d.issueTime)) + '（不另抄第二遍）</div>'
+            );
+        });
+    });
+</script>
+</body>
+</html>

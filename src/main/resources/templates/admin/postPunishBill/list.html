@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <th:block th:include="include :: header('违法行为查处逐级核签台账')"/>
+</head>
+<body class="pear-container">
+<div class="layui-card">
+    <div class="layui-card-body">
+        <form class="layui-form" action="">
+            <div class="layui-form-item">
+                <label class="layui-form-label">核签单号</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="billNo" class="layui-input">
+                </div>
+                <label class="layui-form-label">企业字号</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="siteNo" class="layui-input">
+                </div>
+                <label class="layui-form-label">涉案网点</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="outletNo" class="layui-input">
+                </div>
+                <label class="layui-form-label">所在开次</label>
+                <div class="layui-input-inline">
+                    <select name="nodeNo">
+                        <option value="">全部</option>
+                        <option value="0">受案</option>
+                        <option value="1">核查</option>
+                        <option value="2">并签</option>
+                        <option value="3">签发</option>
+                    </select>
+                </div>
+                <button class="pear-btn pear-btn-md pear-btn-primary" lay-submit lay-filter="bill-query">
+                    <i class="layui-icon layui-icon-search"></i> 查询
+                </button>
+                <button type="reset" class="pear-btn pear-btn-md">
+                    <i class="layui-icon layui-icon-refresh"></i> 重置
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="layui-card">
+    <div class="layui-card-body">
+        <table id="bill-table" lay-filter="bill-table"></table>
+    </div>
+</div>
+
+<!-- 受案四要素 -->
+<script type="text/html" id="bill-toolbar">
+    <button shiro:hasPermission="postPunishBill:accept" class="pear-btn pear-btn-primary pear-btn-md" lay-event="accept">
+        <i class="layui-icon layui-icon-add-1"></i> 受案进门
+    </button>
+</script>
+
+<script type="text/html" id="bill-bar">
+    <button shiro:hasPermission="postPunishBill:view" class="pear-btn pear-btn-primary pear-btn-sm" lay-event="workbench">
+        <i class="layui-icon layui-icon-form"></i> 办件
+    </button>
+    <button shiro:hasPermission="postPunishBill:trace" class="pear-btn pear-btn-warming pear-btn-sm" lay-event="trace">
+        <i class="layui-icon layui-icon-log"></i> 倒计
+    </button>
+    {{# if(d.sealed==1){ }}
+    <button shiro:hasPermission="postPunishBill:confirm" class="pear-btn pear-btn-success pear-btn-sm" lay-event="confirm">
+        <i class="layui-icon layui-icon-print"></i> 确认单
+    </button>
+    {{# } }}
+</script>
+
+<script type="text/html" id="node-tpl">
+    {{# var ns=['受案','核查','并签','签发']; }}
+    <span class="layui-badge layui-bg-blue">{{ ns[d.nodeNo] || d.nodeNo }}</span>
+    {{# if(d.bouncedRound>0){ }}<span class="layui-badge layui-bg-orange">第{{d.bouncedRound+1}}趟</span>{{# } }}
+</script>
+
+<script type="text/html" id="status-tpl">
+    {{# if(d.stopKind!=null){ }}
+        <span class="layui-badge">{{ d.stopKind==1?'不予立案':'撤案' }}</span>
+    {{# } else if(d.sealed==1){ }}
+        <span class="layui-badge layui-bg-green">已核讫封死</span>
+    {{# } else if(d.status==2){ }}
+        <span class="layui-badge layui-bg-orange">已打回</span>
+    {{# } else { }}
+        <span class="layui-badge layui-bg-gray">在核</span>
+    {{# } }}
+</script>
+
+<script type="text/html" id="year-tpl">
+    第{{d.yearNo}}件
+    {{# if(d.yearNo>=2){ }}<span class="layui-badge layui-bg-red">当场点名</span>{{# } }}
+</script>
+
+<!-- 受案弹层 -->
+<script type="text/html" id="accept-form">
+    <form class="layui-form" style="padding:20px 10px 0 0" id="acceptForm" lay-filter="acceptForm">
+        <div class="layui-form-item">
+            <label class="layui-form-label">企业字号</label>
+            <div class="layui-input-block">
+                <input type="text" name="siteNo" required lay-verify="required" placeholder="在册底档字号，只认字号" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">涉案网点</label>
+            <div class="layui-input-block">
+                <input type="text" name="outletNo" required lay-verify="required" placeholder="末端网点备案建档卡号" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">网点地址</label>
+            <div class="layui-input-block">
+                <input type="text" name="outletAddr" placeholder="核对时可补" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">事由</label>
+            <div class="layui-input-block">
+                <textarea name="caseReason" required lay-verify="required" class="layui-textarea"></textarea>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">来源</label>
+            <div class="layui-input-block">
+                <input type="text" name="caseSource" required lay-verify="required" placeholder="如：省局案卷评查/日常巡查" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">申请人姓名</label>
+            <div class="layui-input-block">
+                <input type="text" name="applicantName" placeholder="仅留痕，不作核对凭据" class="layui-input">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <div class="layui-input-block">
+                <button class="pear-btn pear-btn-primary" lay-submit lay-filter="accept-submit">进门</button>
+            </div>
+        </div>
+    </form>
+</script>
+
+<th:block th:include="include :: footer"/>
+<script>
+    layui.use(['table', 'form', 'jquery', 'layer'], function () {
+        let table = layui.table, form = layui.form, $ = layui.jquery, layer = layui.layer;
+        let MODULE_PATH = rootPath + "/postPunishBill/";
+        let acceptBound = false;
+
+        table.render({
+            elem: '#bill-table',
+            url: MODULE_PATH + 'list',
+            method: 'get',
+            page: true,
+            skin: 'line',
+            toolbar: '#bill-toolbar',
+            cols: [[
+                {field: 'billNo', title: '核签单号', width: 210},
+                {field: 'siteNo', title: '企业字号', width: 110},
+                {field: 'siteName', title: '企业全称', minWidth: 200},
+                {field: 'outletNo', title: '涉案网点', width: 140},
+                {field: 'yearNo', title: '当年序次', width: 120, templet: '#year-tpl', align: 'center'},
+                {field: 'nodeNo', title: '所在开次', width: 120, templet: '#node-tpl', align: 'center'},
+                {field: 'status', title: '情形', width: 130, templet: '#status-tpl', align: 'center'},
+                {field: 'blockedBy', title: '压件整改卡', width: 140},
+                {title: '操作', width: 230, toolbar: '#bill-bar', align: 'center', fixed: 'right'}
+            ]]
+        });
+
+        form.on('submit(bill-query)', function (data) {
+            table.reload('bill-table', {where: data.field, page: {curr: 1}});
+            return false;
+        });
+
+        table.on('toolbar(bill-table)', function (obj) {
+            if (obj.event === 'accept') {
+                layer.open({
+                    type: 1, title: '头一开·受案（四样写齐才进门）', area: ['560px', '560px'],
+                    content: $('#accept-form').html(),
+                    success: function () {
+                        form.render(null, 'acceptForm');
+                        if (!acceptBound) {
+                            acceptBound = true;
+                            form.on('submit(accept-submit)', function (d) {
+                                $.post(MODULE_PATH + 'accept', d.field, function (res) {
+                                    layer.msg(res.msg, {icon: res.code === 200 ? 1 : 2});
+                                    if (res.code === 200) {
+                                        layer.closeAll();
+                                        table.reload('bill-table');
+                                    }
+                                });
+                                return false;
+                            });
+                        }
+                    }
+                });
+            }
+        });
+
+        table.on('tool(bill-table)', function (obj) {
+            if (obj.event === 'workbench') {
+                location.href = MODULE_PATH + 'workbench?id=' + obj.data.id;
+            } else if (obj.event === 'trace') {
+                layer.open({
+                    type: 2, title: '倒计复核（末一开→受案）', area: ['820px', '600px'],
+                    content: MODULE_PATH + 'workbench?id=' + obj.data.id + '&tab=trace'
+                });
+            } else if (obj.event === 'confirm') {
+                window.open(MODULE_PATH + 'confirmView?id=' + obj.data.id);
+            }
+        });
+    });
+</script>
+</body>
+</html>

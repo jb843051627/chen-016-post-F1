@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <th:block th:include="include :: header('核签单办件工作台')"/>
+    <style>
+        .step {display:inline-block;padding:6px 18px;border-radius:4px;background:#f2f2f2;color:#999;margin-right:8px;}
+        .step.on {background:#1e9fff;color:#fff;font-weight:bold;}
+        .step.done {background:#16baaa;color:#fff;}
+        .panel {margin-top:12px;}
+        .kv {line-height:28px;}
+        .kv b {display:inline-block;width:110px;color:#666;}
+        .sign-tag {margin-right:8px;}
+    </style>
+</head>
+<body class="pear-container">
+<input type="hidden" id="billId" th:value="${billId}">
+<input type="hidden" id="openTab" th:value="${param.tab}">
+
+<div class="layui-card">
+    <div class="layui-card-header">
+        <a th:href="@{/postPunishBill/view}" class="pear-btn pear-btn-md">← 返回台账</a>
+        <span style="margin-left:12px;font-size:16px;font-weight:bold">查处核签单办件</span>
+        <span style="margin-left:10px" id="roundTag"></span>
+    </div>
+    <div class="layui-card-body">
+        <div id="steps">
+            <span class="step" data-n="0">头一开·受案</span>
+            <span class="step" data-n="1">第二开·核查</span>
+            <span class="step" data-n="2">第三开·并签</span>
+            <span class="step" data-n="3">末一开·签发</span>
+        </div>
+        <div class="layui-tab layui-tab-brief panel" lay-filter="wbTab">
+            <ul class="layui-tab-title">
+                <li class="layui-this">办件</li>
+                <li>四开明细分账</li>
+                <li>倒计复核</li>
+            </ul>
+            <div class="layui-tab-content">
+                <!-- 办件 -->
+                <div class="layui-tab-item layui-show">
+                    <div id="billInfo" class="kv"></div>
+                    <hr>
+
+                    <!-- 核查面板 -->
+                    <div id="verifyPanel" class="panel" style="display:none">
+                        <h3>第二开·核查（在册底档对现场材料，只认字号不认姓名）</h3>
+                        <form class="layui-form" style="max-width:640px">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">现场数值</label>
+                                <div class="layui-input-block">
+                                    <input type="number" step="0.01" name="input" required lay-verify="required" placeholder="现场材料数值，送当季判据线定格" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">判据线代号</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="ruleCode" placeholder="留空取当季顺位最高者" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">网点地址</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="outletAddr" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">核查意见</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="opinion" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <div class="layui-input-block">
+                                    <button shiro:hasPermission="postPunishBill:verify" class="pear-btn pear-btn-primary" lay-submit lay-filter="verify-submit">核查放行</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 并签面板 -->
+                    <div id="cosignPanel" class="panel" style="display:none">
+                        <h3>第三开·并签（两名并排落名，一人盯程序、一人盯裁量）</h3>
+                        <blockquote class="layui-elem-quote" id="countBox">已签数由件顺着签迹点算，页面不设手工填数格。</blockquote>
+                        <table class="layui-table" style="max-width:760px">
+                            <thead><tr><th>笔账</th><th>落名人</th><th>落名时刻</th><th>是否替人</th></tr></thead>
+                            <tbody id="signTbody"></tbody>
+                        </table>
+                        <form class="layui-form" style="max-width:640px">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">这笔盯</label>
+                                <div class="layui-input-block">
+                                    <input type="radio" name="signRole" value="1" title="程序走没走全" checked>
+                                    <input type="radio" name="signRole" value="2" title="裁量幅度合不合当季那一格">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">本人落名</label>
+                                <div class="layui-input-inline" style="width:200px">
+                                    <input type="text" name="signerName" required lay-verify="required" class="layui-input">
+                                </div>
+                                <input type="checkbox" name="onBehalf" value="1" title="替人落（不作数）">
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">意见</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="opinion" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <div class="layui-input-block">
+                                    <button shiro:hasPermission="postPunishBill:cosign" class="pear-btn pear-btn-primary" lay-submit lay-filter="cosign-submit">落一笔</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 签发面板 -->
+                    <div id="sealPanel" class="panel" style="display:none">
+                        <h3>末一开·签发（签章封死 → 同步省局名录 → 一键开出整改确认单）</h3>
+                        <form class="layui-form" style="max-width:640px">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">责令改正期限</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="rectifyDeadline" id="deadlineInput" required lay-verify="required" placeholder="yyyy-MM-dd HH:mm:ss" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">救济途径</label>
+                                <div class="layui-input-block">
+                                    <textarea name="reliefWay" required lay-verify="required" placeholder="如：60日内向省邮政管理局申请行政复议，或6个月内提起行政诉讼" class="layui-textarea"></textarea>
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">签发意见</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="opinion" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <div class="layui-input-block">
+                                    <button shiro:hasPermission="postPunishBill:seal" class="pear-btn pear-btn-danger" lay-submit lay-filter="seal-submit">签章封死并出单</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 止步 / 退回 -->
+                    <div id="actionPanel" class="panel">
+                        <button shiro:hasPermission="postPunishBill:stop" class="pear-btn pear-btn-warming" id="stopBtn">写下止步（不予立案/撤案）</button>
+                        <button shiro:hasPermission="postPunishBill:bounce" class="pear-btn" id="bounceBtn" style="display:none">省局退回（沉底重累）</button>
+                    </div>
+                </div>
+
+                <!-- 明细分账 -->
+                <div class="layui-tab-item">
+                    <table class="layui-table">
+                        <thead><tr><th>开次</th><th>轮次</th><th>落名</th><th>分工</th><th>记事</th><th>止步</th><th>封死</th><th>时刻</th></tr></thead>
+                        <tbody id="nodeTbody"></tbody>
+                    </table>
+                    <blockquote class="layui-elem-quote" style="color:#999">省局退回后旧轮各开一律作废沉底，不在此并列；受案开为首趟凭据，跨轮作数。</blockquote>
+                </div>
+
+                <!-- 倒计复核 -->
+                <div class="layui-tab-item">
+                    <div id="traceBox"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<th:block th:include="include :: footer"/>
+<script th:inline="javascript">
+    layui.use(['table', 'form', 'jquery', 'layer', 'element', 'laydate'], function () {
+        let form = layui.form, $ = layui.jquery, layer = layui.layer, element = layui.element, laydate = layui.laydate;
+        let BILL_ID = $('#billId').val();
+        let PATH = rootPath + "/postPunishBill/";
+        let NODE_NAMES = ['受案', '核查', '并签', '签发'];
+        laydate.render({elem: '#deadlineInput', type: 'datetime', format: 'yyyy-MM-dd HH:mm:ss'});
+
+        if ($('#openTab').val() && $('#openTab').val().indexOf('trace') >= 0) {
+            element.tabChange('wbTab', '倒计复核');
+        }
+
+        function fail(msg) { layer.msg(msg || '操作失败', {icon: 2}); }
+
+        function renderSteps(bill) {
+            $('.step').each(function () {
+                let n = parseInt($(this).attr('data-n'));
+                $(this).removeClass('on done');
+                if (bill.sealed === 1 || bill.stopKind != null) {
+                    if (bill.stopKind != null) {
+                        if (n <= bill.nodeNo) $(this).addClass('done');
+                    } else {
+                        $(this).addClass('done');
+                    }
+                } else if (n < bill.nodeNo) {
+                    $(this).addClass('done');
+                } else if (n === bill.nodeNo) {
+                    $(this).addClass('on');
+                }
+            });
+            $('#roundTag').html(bill.bouncedRound > 0
+                ? '<span class="layui-badge layui-bg-orange">省局退回后第' + (bill.bouncedRound + 1) + '趟，旧轮已沉底</span>' : '');
+        }
+
+        function renderInfo(b) {
+            let st = b.stopKind != null ? ('已止步：' + (b.stopKind === 1 ? '不予立案' : '撤案'))
+                : b.sealed === 1 ? '已核讫·章盖到底' : '在核·停在' + NODE_NAMES[b.nodeNo];
+            $('#billInfo').html(
+                '<b>核签单号：</b>' + b.billNo + '　<b>情形：</b>' + st +
+                (b.blockedBy ? '　<span class="layui-badge">压件整改卡 ' + b.blockedBy + '</span>' : '') + '<br>' +
+                '<b>企业字号：</b>' + b.siteNo + '（' + b.siteName + '）　<b>当年第：</b>' + b.yearNo + ' 件' +
+                (b.yearNo >= 2 ? ' <span class="layui-badge layui-bg-red">当场点名</span>' : '') + '<br>' +
+                '<b>涉案网点：</b>' + b.outletNo + (b.outletAddr ? ('（' + b.outletAddr + '）') : '') + '<br>' +
+                '<b>事由：</b>' + b.caseReason + '<br><b>来源：</b>' + b.caseSource +
+                (b.gradeLevel != null ? '<br><b>当季定格：</b>判据线 ' + b.ruleCode + ' 第 ' + b.gradeLevel + ' 格（现场值 ' + b.verifyInput + '）' : '') +
+                (b.outConfirmNo ? '<br><b>整改确认单：</b>' + b.outConfirmNo : ''));
+            $('#verifyPanel').toggle(!b.sealed && b.stopKind == null && b.nodeNo === 1);
+            $('#cosignPanel').toggle(!b.sealed && b.stopKind == null && b.nodeNo === 2);
+            $('#sealPanel').toggle(!b.sealed && b.stopKind == null && b.nodeNo === 3);
+            $('#stopBtn').toggle(!b.sealed && b.stopKind == null);
+            $('#bounceBtn').toggle(b.sealed === 1);
+        }
+
+        function loadBill() {
+            $.get(PATH + 'detail', {id: BILL_ID}, function (res) {
+                if (res.code !== 200) return fail(res.msg);
+                renderSteps(res.data);
+                renderInfo(res.data);
+            });
+            $.get(PATH + 'nodes', {id: BILL_ID}, function (res) {
+                let rows = res.data || [];
+                $('#nodeTbody').html(rows.map(function (n) {
+                    return '<tr><td>' + NODE_NAMES[n.nodeNo] + '</td><td>第' + (n.roundNo + 1) + '趟</td>' +
+                        '<td>' + (n.actorName || '') + '</td><td>' + (n.signRole ? (n.signRole === 1 ? '盯程序' : '盯裁量') : '') + '</td>' +
+                        '<td>' + (n.opinion || '') + '</td><td>' + (n.stopKind ? (n.stopKind === 1 ? '不予立案' : '撤案') : '') + '</td>' +
+                        '<td>' + (n.sealed === 1 ? '已封死' : '') + '</td><td>' + (n.createTime || '') + '</td></tr>';
+                }).join(''));
+            });
+            loadCount();
+            loadTrace();
+        }
+
+        function loadCount() {
+            $.get(PATH + 'count', {id: BILL_ID}, function (res) {
+                let c = res.data;
+                if (!c) return;
+                $('#countBox').html('本开应签 <b>' + c.needCount + '</b> 笔；顺着签迹点算已签 <b>' + c.viewCount +
+                    '</b> 笔；库里存 <b>' + c.dbCount + '</b> 笔；两数' + (c.consistent ? '接平' : '<span style="color:red">接不平，这一开不算满</span>') +
+                    '；代签不作数 ' + c.onBehalfCount + ' 笔。' +
+                    '<br>程序笔：' + (c.programSigned ? c.programSigner : '<span style="color:#999">缺</span>') +
+                    ' ｜ 裁量笔：' + (c.discretionSigned ? c.discretionSigner : '<span style="color:#999">缺</span>'));
+            });
+            $.get(PATH + 'signList', {id: BILL_ID}, function (res) {
+                $('#signTbody').html((res.data || []).map(function (s) {
+                    return '<tr><td>' + (s.signRole === 1 ? '盯程序' : '盯裁量') + '</td><td>' + s.signerName + '</td>' +
+                        '<td>' + (s.signTime || '') + '</td><td>' + (s.onBehalf === 1 ? '<span class="layui-badge">替人·不作数</span>' : '本人') + '</td></tr>';
+                }).join(''));
+            });
+        }
+
+        function loadTrace() {
+            $.get(PATH + 'trace', {id: BILL_ID}, function (res) {
+                let t = res.data;
+                if (!t) { $('#traceBox').html('件不存在'); return; }
+                let html = '<blockquote class="layui-elem-quote">第' + (t.roundNo + 1) + '趟 · ' +
+                    '省局名录：' + (t.rosterSynced ? '已同步' : '未同步') + ' · 确认单同源：' +
+                    (t.confirmSameSource === true ? '一致' : t.confirmSameSource === false ? '<b style="color:red">接不平</b>' : '—（未封死无单可对）') +
+                    ' · 倒计结论：' + (t.allRecheckPass ? '<b style="color:#16baaa">每一开都经得起复核</b>' : '<b style="color:red">有对不上号的名目</b>') + '</blockquote>';
+                html += '<table class="layui-table"><thead><tr><th>开次（倒序）</th><th>落名</th><th>记事</th><th>时刻</th><th>复核</th></tr></thead><tbody>';
+                (t.nodes || []).forEach(function (n) {
+                    html += '<tr ' + (n.recheckPass ? '' : 'style="background:#fff3f3"') + '><td>' + n.nodeName +
+                        (n.stopKind ? '（' + (n.stopKind === 1 ? '不予立案' : '撤案') + '）' : '') + '</td><td>' + (n.actorName || '') +
+                        '</td><td>' + (n.opinion || '') + '</td><td>' + (n.actionTime || '') + '</td><td>' +
+                        (n.recheckPass ? '<span style="color:#16baaa">' + n.recheckMsg + '</span>' : '<span style="color:red">' + n.recheckMsg + '</span>') + '</td></tr>';
+                });
+                html += '</tbody></table>';
+                if (t.problems && t.problems.length) {
+                    html += '<div style="color:red">对不上号的名目：<br>' + t.problems.map(p => '· ' + p).join('<br>') + '</div>';
+                }
+                $('#traceBox').html(html);
+            });
+        }
+
+        function postReload(url, data) {
+            let loading = layer.load();
+            $.post(url, data, function (res) {
+                layer.close(loading);
+                layer.msg(res.msg, {icon: res.code === 200 ? 1 : 2});
+                if (res.code === 200) loadBill();
+            }).fail(function () { layer.close(loading); fail(); });
+        }
+
+        form.on('submit(verify-submit)', function (d) {
+            d.field.id = BILL_ID;
+            postReload(PATH + 'verify', d.field);
+            return false;
+        });
+        form.on('submit(cosign-submit)', function (d) {
+            d.field.id = BILL_ID;
+            postReload(PATH + 'cosign', d.field);
+            return false;
+        });
+        form.on('submit(seal-submit)', function (d) {
+            d.field.id = BILL_ID;
+            layer.confirm('章一盖到底各栏即封死、同步省局名录并开出对外确认单，确认？', function (idx) {
+                layer.close(idx);
+                postReload(PATH + 'seal', d.field);
+            });
+            return false;
+        });
+
+        $('#stopBtn').on('click', function () {
+            layer.prompt({title: '止步名目：填 1 不予立案 / 2 撤案', formType: 0}, function (val, idx) {
+                let kind = parseInt(val);
+                if (kind !== 1 && kind !== 2) return fail("只能填 1 或 2");
+                layer.close(idx);
+                layer.prompt({title: '止步意见（可空）'}, function (op, i2) {
+                    layer.close(i2);
+                    postReload(PATH + 'stop', {id: BILL_ID, stopKind: kind, opinion: op});
+                });
+            });
+        });
+        $('#bounceBtn').on('click', function () {
+            layer.prompt({title: '省局退回缘由（如：措辞不合规矩）'}, function (op, idx) {
+                layer.close(idx);
+                postReload(PATH + 'bounce', {id: BILL_ID, opinion: op});
+            });
+        });
+
+        loadBill();
+    });
+</script>
+</body>
+</html>

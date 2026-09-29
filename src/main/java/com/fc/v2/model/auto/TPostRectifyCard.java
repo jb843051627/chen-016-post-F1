@@ -36,6 +36,11 @@ public class TPostRectifyCard implements Serializable {
     @ApiModelProperty(value = "责令整改事务卡号")
     private String bizNo;
 
+    /** 压着的末端网点备案建档卡号（没了结则该网点的件停在核查开） */
+    @TableField("outlet_no")
+    @ApiModelProperty(value = "压着的末端网点备案建档卡号")
+    private String outletNo;
+
     /** 当前段次 0..3（下达/整改中/复查/销案） */
     @TableField("stage")
     @ApiModelProperty(value = "当前段次 0..3（下达/整改中/复查/销案）")
@@ -102,6 +107,14 @@ public class TPostRectifyCard implements Serializable {
 
     public void setBizNo(String bizNo) {
         this.bizNo = bizNo;
+    }
+
+    public String getOutletNo() {
+        return outletNo;
+    }
+
+    public void setOutletNo(String outletNo) {
+        this.outletNo = outletNo;
     }
 
     public Integer getStage() {

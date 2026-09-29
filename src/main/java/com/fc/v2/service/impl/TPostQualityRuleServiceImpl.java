@@ -1,6 +1,8 @@
 package com.fc.v2.service.impl;
 
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -20,6 +22,9 @@ import com.fc.v2.service.ITPostQualityRuleService;
  */
 @Service
 public class TPostQualityRuleServiceImpl implements ITPostQualityRuleService {
+
+    /** 现行 */
+    private static final int STATUS_ACTIVE = 0;
 
     /** 优先级降序；并列按 ruleCode 降序（确定性） */
     private static final Comparator<TPostQualityRule> PRIORITY_THEN_CODE_DESC = new Comparator<TPostQualityRule>() {
@@ -45,7 +50,7 @@ public class TPostQualityRuleServiceImpl implements ITPostQualityRuleService {
      * 使边界判定在"切换当日"这类用例上随机错档（实测踩到）。
      */
     private static String ts(Date d) {
-        return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(d);
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(d);
     }
 
     @Override
@@ -56,9 +61,18 @@ public class TPostQualityRuleServiceImpl implements ITPostQualityRuleService {
     @Override
     public List<TPostQualityRule> listAvailable(Date at) {
         if (at == null) {
-            return new java.util.ArrayList<TPostQualityRule>();
+            return new ArrayList<TPostQualityRule>();
         }
-        return this.postQualityRuleMapper.selectList(new QueryWrapper<TPostQualityRule>().eq("del_flag", 0));
+        QueryWrapper<TPostQualityRule> qw = new QueryWrapper<TPostQualityRule>()
+                .eq("del_flag", 0)
+                .eq("status", STATUS_ACTIVE)
+                // 启用之日 <= at（未填启用日视为早已启用）
+                .and(w -> w.isNull("eff_start").or().le("eff_start", ts(at)))
+                // 交棒之日不含：eff_end > at（未填交棒日视为长期现行）
+                .and(w -> w.isNull("eff_end").or().gt("eff_end", ts(at)));
+        List<TPostQualityRule> rows = this.postQualityRuleMapper.selectList(qw);
+        rows.sort(PRIORITY_THEN_CODE_DESC);
+        return rows;
     }
 
     @Override
@@ -92,7 +106,10 @@ public class TPostQualityRuleServiceImpl implements ITPostQualityRuleService {
             return false;
         }
         TPostQualityRule r = this.postQualityRuleMapper.selectById(id);
-        return r != null;
+        return r != null
+                && (r.getDelFlag() == null || r.getDelFlag() == 0)
+                && r.getStatus() != null && r.getStatus() == STATUS_ACTIVE
+                && windowContains(r, at);
     }
 
     @Override
@@ -100,42 +117,41 @@ public class TPostQualityRuleServiceImpl implements ITPostQualityRuleService {
         if (at == null) {
             return 0;
         }
-        return this.postQualityRuleMapper
-                .selectList(new QueryWrapper<TPostQualityRule>().eq("del_flag", 0)).size();
+        QueryWrapper<TPostQualityRule> qw = new QueryWrapper<TPostQualityRule>()
+                .eq("del_flag", 0)
+                .eq("status", STATUS_ACTIVE)
+                .and(w -> w.isNull("eff_start").or().le("eff_start", ts(at)))
+                .and(w -> w.isNull("eff_end").or().gt("eff_end", ts(at)));
+        Integer cnt = this.postQualityRuleMapper.selectCount(qw);
+        return cnt == null ? 0 : cnt;
     }
 
+    /** 定位某代号在 at 时刻现行的版本：只在生效窗口内找，窗口内多于一条时让线顺位高者说话 */
     private TPostQualityRule findRule(String ruleCode, Date at) {
-        List<TPostQualityRule> hit = this.postQualityRuleMapper.selectList(new QueryWrapper<TPostQualityRule>()
-                .eq("del_flag", 0).eq("rule_code", ruleCode));
-        TPostQualityRule newest = null;
-        for (TPostQualityRule r : hit) {
-            if (newest == null || r.getEffEnd() == null) {
-                newest = r;
-            } else if (newest.getEffEnd() != null && r.getEffEnd().after(newest.getEffEnd())) {
-                newest = r;
+        TPostQualityRule hit = null;
+        for (TPostQualityRule r : listAvailable(at)) {
+            if (ruleCode.equals(r.getRuleCode())) {
+                if (hit == null || PRIORITY_THEN_CODE_DESC.compare(r, hit) < 0) {
+                    hit = r;
+                }
             }
         }
-        return newest;
+        return hit;
     }
 
-    /** 阈值解析：档案为主、明细覆盖；两者皆缺返回 null（调用方按不可用处理），精度统一 2 位 */
-    private BigDecimal resolveLimit(TPostQualityRule r, int tier) {
-        if (tier == 1) {
-            return r.getTh1Max();
+    /** 是否落在 [eff_start, eff_end) 窗口；空边界视为不限 */
+    private boolean windowContains(TPostQualityRule r, Date at) {
+        if (r.getEffStart() != null && at.before(r.getEffStart())) {
+            return false;
         }
-        if (tier == 2) {
-            return r.getTh2Max();
-        }
-        return r.getTh3Max();
-    }
-
-    /** 档案级默认阈值（明细未维护时的回退来源） */
-    private BigDecimal defaultThreshold(TPostQualityRule r, int tier) {
-        return r.getTh1Max();
+        return r.getEffEnd() == null || at.before(r.getEffEnd());
     }
 
     /** 分档：等于上限取高一档 */
     private int levelOf(TPostQualityRule rule, BigDecimal input) {
+        if (rule == null) {
+            return 0;
+        }
         if (rule.getTh1Max() != null && input.compareTo(rule.getTh1Max()) <= 0) {
             return 1;
         }
